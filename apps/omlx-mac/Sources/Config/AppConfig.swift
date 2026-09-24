@@ -25,6 +25,13 @@
 import Foundation
 
 struct AppConfig: Sendable, Equatable, Codable {
+    enum BindAddressKind: Equatable {
+        case local
+        case ipv4Wildcard
+        case ipv6Wildcard
+        case specific(String)
+    }
+
     /// The raw bind address the user configured (e.g. `0.0.0.0`, `127.0.0.1`, `localhost`).
     var bindAddress: String
     /// The connectable host — normalises wildcard/local binds to loopback
@@ -123,6 +130,23 @@ struct AppConfig: Sendable, Equatable, Codable {
             return "127.0.0.1"
         default:
             return host
+        }
+    }
+
+    static func bindAddressKind(for bindAddress: String) -> BindAddressKind {
+        var host = primaryBindHost(for: bindAddress)
+        if host.hasPrefix("[") && host.hasSuffix("]") {
+            host = String(host.dropFirst().dropLast())
+        }
+        switch host.lowercased() {
+        case "", "localhost", "127.0.0.1", "::1":
+            return .local
+        case "0.0.0.0":
+            return .ipv4Wildcard
+        case "::":
+            return .ipv6Wildcard
+        default:
+            return .specific(host)
         }
     }
 

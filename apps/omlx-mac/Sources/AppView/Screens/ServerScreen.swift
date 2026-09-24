@@ -323,6 +323,11 @@ private struct ModelDirectoriesEditor: View {
 /// into the restart. On the Status screen there is no such VM, so it just
 /// asks AppServices to bounce the cached endpoint.
 struct ServerHeroCard: View {
+    private enum StatusTextPhase {
+        case starting
+        case listening
+    }
+
     var vm: ServerScreenVM? = nil
 
     @Environment(AppServices.self) private var services
@@ -349,6 +354,14 @@ struct ServerHeroCard: View {
                 Text(subtitle)
                     .font(.omlxText(11.5))
                     .foregroundStyle(theme.textSecondary)
+                if showsNetworkExposureWarning {
+                    Label(String(localized: "server.hero.network_exposure",
+                                 defaultValue: "Accessible from other devices on your network",
+                                 comment: "Warning shown when the server is bound to a wildcard network address"),
+                          systemImage: "network")
+                        .font(.omlxText(10.5, weight: .medium))
+                        .foregroundStyle(theme.warningText)
+                }
             }
             Spacer(minLength: 12)
             buttons
@@ -437,17 +450,13 @@ struct ServerHeroCard: View {
     }
 
     private var subtitle: String {
-        let host = services.config.host
+        let bindAddress = services.config.bindAddress
         let port = services.config.port
         switch services.serverState {
         case .running, .unresponsive:
-            return String(localized: "server.hero.subtitle.listening",
-                          defaultValue: "Listening on \(host):\(String(port))",
-                          comment: "Hero subtitle while server is running; placeholders are host and port (port is plain integer, no grouping)")
+            return statusText(phase: .listening, bindAddress: bindAddress, port: port)
         case .starting:
-            return String(localized: "server.hero.subtitle.starting",
-                          defaultValue: "Starting on \(host):\(String(port))…",
-                          comment: "Hero subtitle while server is starting up; placeholders are host and port (port is plain integer, no grouping)")
+            return statusText(phase: .starting, bindAddress: bindAddress, port: port)
         case .stopping:
             return String(localized: "server.hero.subtitle.stopping",
                           defaultValue: "Stopping…",
@@ -458,6 +467,66 @@ struct ServerHeroCard: View {
                           comment: "Hero subtitle when server is stopped")
         case .failed(let m):
             return m
+        }
+    }
+
+    private var showsNetworkExposureWarning: Bool {
+        switch AppConfig.bindAddressKind(for: services.config.bindAddress) {
+        case .ipv4Wildcard, .ipv6Wildcard:
+            return services.serverState == .running || services.serverState == .unresponsive
+        default:
+            return false
+        }
+    }
+
+    private func statusText(
+        phase: StatusTextPhase,
+        bindAddress: String,
+        port: Int
+    ) -> String {
+        let portText = String(port)
+        switch AppConfig.bindAddressKind(for: bindAddress) {
+        case .ipv4Wildcard:
+            let key = phase == .starting
+                ? "server.hero.subtitle.starting_ipv4_wildcard"
+                : "server.hero.subtitle.listening_ipv4_wildcard"
+            let fallback = phase == .starting
+                ? "Starting on all IPv4 interfaces (0.0.0.0:\(portText))…"
+                : "Listening on all IPv4 interfaces (0.0.0.0:\(portText))"
+            return String(localized: String.LocalizationValue(key),
+                          defaultValue: fallback,
+                          comment: "Server hero subtitle for an IPv4 wildcard bind")
+        case .ipv6Wildcard:
+            let key = phase == .starting
+                ? "server.hero.subtitle.starting_ipv6_wildcard"
+                : "server.hero.subtitle.listening_ipv6_wildcard"
+            let fallback = phase == .starting
+                ? "Starting on all IPv6 interfaces ([::]:\(portText))…"
+                : "Listening on all IPv6 interfaces ([::]:\(portText))"
+            return String(localized: String.LocalizationValue(key),
+                          defaultValue: fallback,
+                          comment: "Server hero subtitle for an IPv6 wildcard bind")
+        case .local:
+            let key = phase == .starting
+                ? "server.hero.subtitle.starting"
+                : "server.hero.subtitle.listening"
+            let fallback = phase == .starting
+                ? "Starting on 127.0.0.1:\(portText)…"
+                : "Listening on 127.0.0.1:\(portText)"
+            return String(localized: String.LocalizationValue(key),
+                          defaultValue: fallback,
+                          comment: "Server hero subtitle for a local-only bind")
+        case .specific(let host):
+            let key = phase == .starting
+                ? "server.hero.subtitle.starting_specific"
+                : "server.hero.subtitle.listening_specific"
+            let endpoint = host.contains(":") ? "[\(host)]:\(portText)" : "\(host):\(portText)"
+            let fallback = phase == .starting
+                ? "Starting on \(endpoint)…"
+                : "Listening on \(endpoint)"
+            return String(localized: String.LocalizationValue(key),
+                          defaultValue: fallback,
+                          comment: "Server hero subtitle for a specific bind address")
         }
     }
 
@@ -781,5 +850,3 @@ private struct ServerAdvancedSection: View {
         }
     }
 }
-
-

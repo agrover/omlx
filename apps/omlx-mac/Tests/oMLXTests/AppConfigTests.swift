@@ -182,6 +182,15 @@ final class AppConfigTests: XCTestCase {
         XCTAssertEqual(AppConfig.connectableHost(for: "127.0.0.1"), "127.0.0.1")
     }
 
+    func testBindAddressKindDistinguishesLocalAndWildcardBinds() {
+        XCTAssertEqual(AppConfig.bindAddressKind(for: "127.0.0.1"), .local)
+        XCTAssertEqual(AppConfig.bindAddressKind(for: "localhost"), .local)
+        XCTAssertEqual(AppConfig.bindAddressKind(for: "0.0.0.0"), .ipv4Wildcard)
+        XCTAssertEqual(AppConfig.bindAddressKind(for: "::"), .ipv6Wildcard)
+        XCTAssertEqual(AppConfig.bindAddressKind(for: "[::]"), .ipv6Wildcard)
+        XCTAssertEqual(AppConfig.bindAddressKind(for: "192.168.1.10"), .specific("192.168.1.10"))
+    }
+
     func testConnectableHostUsesFirstConfiguredBindHost() {
         XCTAssertEqual(
             AppConfig.connectableHost(for: "0.0.0.0,127.0.0.1"),
